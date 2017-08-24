@@ -72,7 +72,13 @@ func Get(targetURL string) (feeds []string, err error) {
 		`link[type="application/x-atom+xml"]`,
 	}
 	body, err := Body(targetURL)
+	if err != nil {
+		return
+	}
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
+	if err != nil {
+		return
+	}
 	for _, sel := range selectors {
 		doc.Find(sel).Each(func(i int, s *goquery.Selection) {
 			feed, exist := s.Attr("href")
