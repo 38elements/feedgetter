@@ -57,6 +57,9 @@ func Body(url string) (body string, err error) {
 		return
 	}
 	bytes, err := ioutil.ReadAll(r)
+	if err != nil {
+		return
+	}
 	body = string(bytes)
 	return
 }
