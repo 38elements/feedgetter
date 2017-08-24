@@ -1,14 +1,15 @@
-package main
+package feedgetter
 
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
 )
 
@@ -41,6 +42,7 @@ func Body(url string) (body string, err error) {
 	if err != nil {
 		return
 	}
+	defer res.Body.Close()
 	enc, err := encode(&res.Header)
 	if err != nil {
 		return
@@ -59,8 +61,30 @@ func Body(url string) (body string, err error) {
 	return
 }
 
-func main() {
-	url := "http://example.com"
-	body, _ := Body(url)
-	fmt.Println(body)
+// Get feeds
+func Get(targetURL string) (feeds []string, err error) {
+	u, _ := url.Parse(targetURL)
+	selectors := []string{
+		`link[type="application/atom+xml"]`,
+		`link[type="text/xml"]`,
+		`link[type="application/rss+xml"]`,
+		`link[type="application/x.atom+xml"]`,
+		`link[type="application/x-atom+xml"]`,
+	}
+	body, err := Body(targetURL)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
+	for _, sel := range selectors {
+		doc.Find(sel).Each(func(i int, s *goquery.Selection) {
+			feed, exist := s.Attr("href")
+			if exist {
+				if strings.Contains(feed, "://") {
+					feeds = append(feeds, feed)
+				} else {
+					_f, _ := url.Parse(feed)
+					feeds = append(feeds, u.ResolveReference(_f).String())
+				}
+			}
+		})
+	}
+	return
 }
