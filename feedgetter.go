@@ -2,7 +2,6 @@ package feedgetter
 
 import (
 	"bytes"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -20,38 +19,33 @@ func response(url string) (res *http.Response, err error) {
 	return c.Get(url)
 }
 
-func encode(h *http.Header) (encode string, err error) {
-	err = nil
+func encode(h *http.Header, body []byte) (encode string) {
+	contentType := ""
 	for k, v := range *h {
 		if strings.ToLower(k) == "content-type" {
-			temp := strings.Split(v[0], "=")
-			if len(temp) != 2 {
-				err = errors.New("There is not charset in header")
-			}
-			encode = temp[1]
-			return
+			contentType = v[0]
+			break
 		}
 	}
-	err = errors.New("There is not content-type in header")
+	_, encode, _ = charset.DetermineEncoding(body, contentType)
 	return
 }
 
-// Body gets content of url
-func Body(url string) (body string, err error) {
+func webpage(url string) (body string, err error) {
 	res, err := response(url)
 	if err != nil {
 		return
 	}
 	defer res.Body.Close()
-	enc, err := encode(&res.Header)
+	byteBody, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return
 	}
-	_body, err := ioutil.ReadAll(res.Body)
+	enc := encode(&res.Header, byteBody)
 	if err != nil {
 		return
 	}
-	s := bytes.NewReader(_body)
+	s := bytes.NewReader(byteBody)
 	r, err := charset.NewReaderLabel(enc, s)
 	if err != nil {
 		return
@@ -66,15 +60,7 @@ func Body(url string) (body string, err error) {
 
 // Get feeds
 func Get(targetURL string) (feeds []string, err error) {
-	u, _ := url.Parse(targetURL)
-	selectors := []string{
-		`link[type="application/atom+xml"]`,
-		`link[type="text/xml"]`,
-		`link[type="application/rss+xml"]`,
-		`link[type="application/x.atom+xml"]`,
-		`link[type="application/x-atom+xml"]`,
-	}
-	body, err := Body(targetURL)
+	body, err := webpage(targetURL)
 	if err != nil {
 		return
 	}
@@ -82,6 +68,14 @@ func Get(targetURL string) (feeds []string, err error) {
 	if err != nil {
 		return
 	}
+	selectors := []string{
+		`link[type="application/atom+xml"]`,
+		`link[type="text/xml"]`,
+		`link[type="application/rss+xml"]`,
+		`link[type="application/x.atom+xml"]`,
+		`link[type="application/x-atom+xml"]`,
+	}
+	u, _ := url.Parse(targetURL)
 	for _, sel := range selectors {
 		doc.Find(sel).Each(func(i int, s *goquery.Selection) {
 			feed, exist := s.Attr("href")
